@@ -52,6 +52,8 @@ def MergeRotationGates : Pass<"merge-rotation-gates", "mlir::ModuleOp"> {
     This pass currently does not affect `xx_minus_yy`, `xx_plus_yy`, `u`, and `u2`.
   }];
 
+  let options = [Option<"quaternionFolding", "quaternion-folding", "bool", "false", "Enable quaternion fusion">,];
+
   let dependentDialects = [ "::mlir::math::MathDialect", ];
 }
 

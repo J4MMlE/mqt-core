@@ -38,6 +38,12 @@ static const std::unordered_set<std::string> MERGEABLE_GATES = {
  */
 struct MergeRotationGatesPattern final
     : mlir::OpInterfaceRewritePattern<UnitaryInterface> {
+    explicit MergeRotationGatesPattern(mlir::MLIRContext* context,
+                                       bool quaternionFolding)
+        : OpInterfaceRewritePattern(context),
+          quaternionFolding(quaternionFolding) {}
+
+    const bool quaternionFolding = false;
 
   explicit MergeRotationGatesPattern(mlir::MLIRContext* context)
       : OpInterfaceRewritePattern(context) {}
@@ -200,8 +206,10 @@ struct MergeRotationGatesPattern final
  *
  * @param patterns The pattern set to populate.
  */
-void populateMergeRotationGatesPatterns(mlir::RewritePatternSet& patterns) {
-  patterns.add<MergeRotationGatesPattern>(patterns.getContext());
+void populateMergeRotationGatesPatterns(mlir::RewritePatternSet& patterns,
+                                        bool quaternionFolding) {
+    patterns.add<MergeRotationGatesPattern>(patterns.getContext(),
+                                            quaternionFolding);
 }
 
 } // namespace mqt::ir::opt
