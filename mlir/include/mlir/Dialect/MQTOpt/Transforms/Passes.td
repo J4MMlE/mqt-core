@@ -51,6 +51,8 @@ def MergeRotationGates : Pass<"merge-rotation-gates", "mlir::ModuleOp"> {
 
     This pass currently does not affect `xx_minus_yy`, `xx_plus_yy`, `u`, and `u2`.
   }];
+
+  let dependentDialects = [ "::mlir::math::MathDialect", ];
 }
 
 def SwapReconstructionAndElision : Pass<"swap-reconstruction-and-elision", "mlir::ModuleOp"> {

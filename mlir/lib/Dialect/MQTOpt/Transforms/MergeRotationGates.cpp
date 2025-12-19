@@ -10,6 +10,7 @@
 
 #include "mlir/Dialect/MQTOpt/Transforms/Passes.h"
 
+#include <mlir/Dialect/Math/IR/Math.h>
 #include <mlir/IR/PatternMatch.h>
 #include <mlir/Support/LLVM.h>
 #include <mlir/Transforms/GreedyPatternRewriteDriver.h>
