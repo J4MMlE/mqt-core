@@ -1,0 +1,201 @@
+diff --git a/mlir/unittests/Dialect/QC/IR/test_qc_ir.cpp b/mlir/unittests/Dialect/QC/IR/test_qc_ir.cpp
+index 7dc3dfe9b..f8724d95c 100644
+--- a/mlir/unittests/Dialect/QC/IR/test_qc_ir.cpp
++++ b/mlir/unittests/Dialect/QC/IR/test_qc_ir.cpp
+@@ -155,6 +155,14 @@ INSTANTIATE_TEST_SUITE_P(
+                     QCTestCase{"NegPowInvIswap",
+                                MQT_NAMED_BUILDER(negPowInvIswap),
+                                MQT_NAMED_BUILDER(negPowInvIswapRef)}));
++// QCTestCase{"CtrlPowEvenZ", MQT_NAMED_BUILDER(ctrlPowEvenZ),
++//            MQT_NAMED_BUILDER(twoQubitsNoOps)},
++// QCTestCase{"CtrlPow0H", MQT_NAMED_BUILDER(ctrlPow0H),
++//            MQT_NAMED_BUILDER(twoQubitsNoOps)},
++// QCTestCase{"CtrlPowEvenSwap", MQT_NAMED_BUILDER(ctrlPowEvenSwap),
++//            MQT_NAMED_BUILDER(ctrlPowEvenSwap)},
++// QCTestCase{"CtrlPowEvenH", MQT_NAMED_BUILDER(ctrlPowEvenH),
++//            MQT_NAMED_BUILDER(twoQubitsNoOps)}));
+ /// @}
+ 
+ /// \name QC/Modifiers/InvOp.cpp
+diff --git a/mlir/unittests/Dialect/QCO/IR/test_qco_ir.cpp b/mlir/unittests/Dialect/QCO/IR/test_qco_ir.cpp
+index 31b1b87a2..bb33fde5b 100644
+--- a/mlir/unittests/Dialect/QCO/IR/test_qco_ir.cpp
++++ b/mlir/unittests/Dialect/QCO/IR/test_qco_ir.cpp
+@@ -227,6 +227,15 @@ INSTANTIATE_TEST_SUITE_P(
+                     QCOTestCase{"NegPowInvIswap",
+                                 MQT_NAMED_BUILDER(negPowInvIswap),
+                                 MQT_NAMED_BUILDER(negPowInvIswapRef)}));
++// QCOTestCase{"CtrlPowEvenZ", MQT_NAMED_BUILDER(ctrlPowEvenZ),
++//             MQT_NAMED_BUILDER(twoQubitsNoOps)},
++// QCOTestCase{"CtrlPow0H", MQT_NAMED_BUILDER(ctrlPow0H),
++//             MQT_NAMED_BUILDER(twoQubitsNoOps)},
++// QCOTestCase{"CtrlPowEvenSwap",
++//             MQT_NAMED_BUILDER(ctrlPowEvenSwap),
++//             MQT_NAMED_BUILDER(ctrlPowEvenSwap)},
++// QCOTestCase{"CtrlPowEvenH", MQT_NAMED_BUILDER(ctrlPowEvenH),
++//             MQT_NAMED_BUILDER(twoQubitsNoOps)}));
+ /// @}
+ 
+ /// \name QCO/Operations/StandardGates/BarrierOp.cpp
+diff --git a/mlir/unittests/programs/qc_programs.cpp b/mlir/unittests/programs/qc_programs.cpp
+index 92ce50d64..84adfc046 100644
+--- a/mlir/unittests/programs/qc_programs.cpp
++++ b/mlir/unittests/programs/qc_programs.cpp
+@@ -1623,6 +1623,28 @@ void negPowInvIswapRef(QCProgramBuilder& b) {
+   b.xx_plus_yy(-2.0 * std::numbers::pi, 0.0, q[0], q[1]);
+ }
+ 
++void ctrlPowEvenZ(QCProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl(q[0], [&] { b.pow(2.0, [&] { b.z(q[1]); }); });
++}
++
++void ctrlPow0H(QCProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl(q[0], [&] { b.pow(0.0, [&] { b.h(q[1]); }); });
++}
++
++void ctrlPowEvenSwap(QCProgramBuilder& b) {
++  auto q = b.allocQubitRegister(3);
++  b.ctrl(q[0], [&] { b.pow(2.0, [&] { b.swap(q[1], q[2]); }); });
++}
++
++void ctrlPowEvenH(QCProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl(q[0], [&] { b.pow(2.0, [&] { b.h(q[1]); }); });
++}
++
++void twoQubitsNoOps(QCProgramBuilder& b) { b.allocQubitRegister(2); }
++
+ void ctrlPowSx(QCProgramBuilder& b) {
+   auto q = b.allocQubitRegister(2);
+   b.ctrl(q[0], [&] { b.pow(1.0 / 3.0, [&] { b.sx(q[1]); }); });
+diff --git a/mlir/unittests/programs/qc_programs.h b/mlir/unittests/programs/qc_programs.h
+index 5452104ea..f5cf39bcc 100644
+--- a/mlir/unittests/programs/qc_programs.h
++++ b/mlir/unittests/programs/qc_programs.h
+@@ -1057,6 +1057,25 @@ void negPowInvIswap(QCProgramBuilder& b);
+ /// Reference for negPowInvIswap: xx_plus_yy(-2π, 0) (the fully folded form).
+ void negPowInvIswapRef(QCProgramBuilder& b);
+ 
++/// ctrl { pow(2) { z } } — angle 2π normalizes to 0 inside modifier,
++/// exercises tryReplaceWithNamedPhaseGate insideModifier → IdOp.
++void ctrlPowEvenZ(QCProgramBuilder& b);
++
++/// ctrl { pow(0) { h } } — exercises ErasePow0 insideModifier → IdOp.
++void ctrlPow0H(QCProgramBuilder& b);
++
++/// ctrl { pow(2) { swap } } — even exponent on multi-qubit hermitian gate
++/// inside modifier cannot be represented, stays unchanged.
++void ctrlPowEvenSwap(QCProgramBuilder& b);
++
++/// ctrl { pow(2) { h } } — exercises FoldPowIntoGate HOp even exponent
++/// insideModifier → IdOp.
++void ctrlPowEvenH(QCProgramBuilder& b);
++
++/// Reference for ctrlPowEvenZ, ctrlPow0H, ctrlPowEvenH: allocates 2 qubits,
++/// no gates (ctrl { id } canonicalizes to pass-through).
++void twoQubitsNoOps(QCProgramBuilder& b);
++
+ /// Creates a circuit with ctrl wrapping pow(1/3) wrapping SX. The fold
+ /// pow(p){SX} → gphase+rx is suppressed inside ctrl (would emit two ops),
+ /// so the pow survives canonicalization and reaches ConvertQCPowOp.
+diff --git a/mlir/unittests/programs/qco_programs.cpp b/mlir/unittests/programs/qco_programs.cpp
+index 41a501e76..e65cedee4 100644
+--- a/mlir/unittests/programs/qco_programs.cpp
++++ b/mlir/unittests/programs/qco_programs.cpp
+@@ -2541,6 +2541,64 @@ void negPowInvIswapRef(QCOProgramBuilder& b) {
+   b.xx_plus_yy(-2.0 * std::numbers::pi, 0.0, q[0], q[1]);
+ }
+ 
++void invPowEvenZ(QCOProgramBuilder& b) {
++  auto q = b.allocQubitRegister(1);
++  b.inv({q[0]}, [&](mlir::ValueRange invArgs) {
++    auto inner = b.pow({invArgs[0]}, 2.0, [&](mlir::ValueRange powArgs) {
++      auto q0 = b.z(powArgs[0]);
++      return llvm::SmallVector<mlir::Value>{q0};
++    });
++    return llvm::SmallVector<mlir::Value>{inner};
++  });
++}
++
++void ctrlPowEvenZ(QCOProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl({q[0]}, {q[1]}, [&](mlir::ValueRange targets) {
++    auto inner = b.pow({targets[0]}, 2.0, [&](mlir::ValueRange powArgs) {
++      auto q0 = b.z(powArgs[0]);
++      return llvm::SmallVector<mlir::Value>{q0};
++    });
++    return llvm::SmallVector<mlir::Value>{inner};
++  });
++}
++
++void ctrlPow0H(QCOProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl({q[0]}, {q[1]}, [&](mlir::ValueRange targets) {
++    auto inner = b.pow({targets[0]}, 0.0, [&](mlir::ValueRange powArgs) {
++      auto q0 = b.h(powArgs[0]);
++      return llvm::SmallVector<mlir::Value>{q0};
++    });
++    return llvm::SmallVector<mlir::Value>{inner};
++  });
++}
++
++void ctrlPowEvenSwap(QCOProgramBuilder& b) {
++  auto q = b.allocQubitRegister(3);
++  b.ctrl({q[0]}, {q[1], q[2]}, [&](mlir::ValueRange targets) {
++    auto inner = b.pow({targets[0], targets[1]}, 2.0,
++                       [&](mlir::ValueRange powArgs) {
++                         auto [q0, q1] = b.swap(powArgs[0], powArgs[1]);
++                         return llvm::SmallVector<mlir::Value>{q0, q1};
++                       });
++    return llvm::to_vector(inner);
++  });
++}
++
++void ctrlPowEvenH(QCOProgramBuilder& b) {
++  auto q = b.allocQubitRegister(2);
++  b.ctrl({q[0]}, {q[1]}, [&](mlir::ValueRange targets) {
++    auto inner = b.pow({targets[0]}, 2.0, [&](mlir::ValueRange powArgs) {
++      auto q0 = b.h(powArgs[0]);
++      return llvm::SmallVector<mlir::Value>{q0};
++    });
++    return llvm::SmallVector<mlir::Value>{inner};
++  });
++}
++
++void twoQubitsNoOps(QCOProgramBuilder& b) { b.allocQubitRegister(2); }
++
+ void ctrlPowSx(QCOProgramBuilder& b) {
+   auto q = b.allocQubitRegister(2);
+   b.ctrl({q[0]}, {q[1]}, [&](mlir::ValueRange targets) {
+diff --git a/mlir/unittests/programs/qco_programs.h b/mlir/unittests/programs/qco_programs.h
+index f2d0f0a73..5d550d9d3 100644
+--- a/mlir/unittests/programs/qco_programs.h
++++ b/mlir/unittests/programs/qco_programs.h
+@@ -1203,6 +1203,25 @@ void negPowInvIswap(QCOProgramBuilder& b);
+ /// Reference for negPowInvIswap: xx_plus_yy(-2π, 0) (the fully folded form).
+ void negPowInvIswapRef(QCOProgramBuilder& b);
+ 
++/// ctrl { pow(2) { z } } — angle 2π normalizes to 0 inside modifier,
++/// exercises tryReplaceWithNamedPhaseGate insideModifier → IdOp.
++void ctrlPowEvenZ(QCOProgramBuilder& b);
++
++/// ctrl { pow(0) { h } } — exercises ErasePow0 insideModifier → IdOp.
++void ctrlPow0H(QCOProgramBuilder& b);
++
++/// ctrl { pow(2) { swap } } — even exponent on multi-qubit hermitian gate
++/// inside modifier cannot be represented, stays unchanged.
++void ctrlPowEvenSwap(QCOProgramBuilder& b);
++
++/// ctrl { pow(2) { h } } — exercises FoldPowIntoGate HOp even exponent
++/// insideModifier → IdOp.
++void ctrlPowEvenH(QCOProgramBuilder& b);
++
++/// Reference for ctrlPowEvenZ, ctrlPow0H, ctrlPowEvenH: allocates 2 qubits,
++/// no gates (ctrl { id } canonicalizes to pass-through).
++void twoQubitsNoOps(QCOProgramBuilder& b);
++
+ /// Creates a circuit with ctrl wrapping pow(1/3) wrapping SX. The fold
+ /// pow(p){SX} → gphase+rx is suppressed inside ctrl (would emit two ops),
+ /// so the pow survives canonicalization and reaches ConvertQCOPowOp.

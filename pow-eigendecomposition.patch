@@ -1,0 +1,48 @@
+Reference: Eigen-based eigendecomposition for PowOp::getUnitaryMatrix()
+File: mlir/lib/Dialect/QCO/IR/Modifiers/PowOp.cpp
+Extracted: 2026-06-18
+Reason: Eigen dependency removed; Matrix.cpp lacks eigenvalue support.
+         To be reimplemented once DynamicMatrix supports eigendecomposition.
+
+--- original getUnitaryMatrix() body (lines 697-736) ---
+
+std::optional<DynamicMatrix> PowOp::getUnitaryMatrix() {
+  auto bodyUnitary = utils::getSoleBodyUnitary<UnitaryOpInterface>(*getBody());
+  if (!bodyUnitary) {
+    return std::nullopt;
+  }
+  auto&& targetMatrix = bodyUnitary.getUnitaryMatrix<DynamicMatrix>();
+  if (!targetMatrix) {
+    return std::nullopt;
+  }
+
+  const double p = getExponentValue();
+
+  // U^1 = U (no computation needed)
+  if (std::abs(p - 1.0) < TOLERANCE) {
+    return targetMatrix;
+  }
+
+  // U^0 = I
+  if (std::abs(p) < TOLERANCE) {
+    const auto dim = targetMatrix->cols();
+    return Eigen::MatrixXcd::Identity(dim, dim);
+  }
+
+  // General case: eigendecomposition U = V D V† => U^p = V D^p V†
+  const Eigen::ComplexEigenSolver<Eigen::MatrixXcd> solver(*targetMatrix);
+  if (solver.info() != Eigen::Success) {
+    return std::nullopt;
+  }
+
+  const auto& eigenvalues = solver.eigenvalues();
+  const auto& v = solver.eigenvectors();
+
+  // Compute D^p: raise each eigenvalue to the power p
+  Eigen::VectorXcd powEigenvalues(eigenvalues.size());
+  for (Eigen::Index i = 0; i < eigenvalues.size(); ++i) {
+    powEigenvalues[i] = std::pow(eigenvalues[i], p);
+  }
+
+  return v * powEigenvalues.asDiagonal() * v.inverse();
+}
