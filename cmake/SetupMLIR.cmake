@@ -15,7 +15,21 @@ set(MQT_MLIR_MIN_VERSION
 
 # MLIR must be installed on the system
 find_package(MLIR REQUIRED CONFIG)
+if(NOT IS_ABSOLUTE "${MLIR_TABLEGEN_EXE}")
+  execute_process(
+    COMMAND which mlir-tblgen
+    OUTPUT_VARIABLE MLIR_TABLEGEN_EXE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  set(MLIR_TABLEGEN_EXE "${MLIR_TABLEGEN_EXE}" CACHE FILEPATH "" FORCE)
+endif()
+message(STATUS "MLIR_TABLEGEN_EXE: ${MLIR_TABLEGEN_EXE}")
+message(STATUS "MLIR_FOUND: ${MLIR_FOUND}")
+message(STATUS "MLIR_VERSION: ${MLIR_VERSION}")
+message(STATUS "MLIR_DIR: ${MLIR_DIR}")
+message(STATUS "All MLIR vars: ${MLIR_INCLUDE_DIRS}")
 if(MLIR_VERSION VERSION_LESS MQT_MLIR_MIN_VERSION)
+  message(STATUS "Found MLIR_VERSION: ${MLIR_VERSION}")
   message(FATAL_ERROR "MLIR version must be at least ${MQT_MLIR_MIN_VERSION}")
 endif()
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
