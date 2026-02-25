@@ -41,7 +41,11 @@ if(BUILD_MQT_CORE_MLIR)
   FetchContent_Declare(
     jeff-mlir
     GIT_REPOSITORY https://github.com/PennyLaneAI/jeff-mlir.git
-    GIT_TAG v0.1.0)
+    GIT_TAG v0.1.0
+    PATCH_COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      ${PROJECT_SOURCE_DIR}/cmake/patches/jeff-mlir-SetupMLIR.cmake
+      <SOURCE_DIR>/cmake/SetupMLIR.cmake)
   list(APPEND FETCH_PACKAGES jeff-mlir)
 endif()
 

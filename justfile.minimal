@@ -1,0 +1,109 @@
+# MQT Core — development task runner
+#
+# Quick start:
+#   1. Install prerequisites: cmake, clang, ninja, lit, LLVM 22.1+ (for MLIR)
+#   2. Run `just build` to configure and build the compiler
+#   3. Run `just test` to run the full test suite
+#
+# Common recipe arguments (passed positionally):
+#   config   — CMake build type: "Debug" (default) or "Release". Example: `just test Release`
+#   coverage — Enable coverage instrumentation: "true" or "false" (default). Only used by `configure`.
+#   file     — Path to an MLIR file for quantum-opt. Example: `just run my_circuit.mlir`
+#
+# Run `just --list` to see all available recipes.
+
+# Output directory for cmake builds (each config gets a subdirectory, e.g. build/Debug)
+build_dir := "build"
+# Number of parallel build and test jobs (passed to cmake --jobs and ctest -j)
+jobs := "8"
+# Default CMake build type when not specified per-recipe ("Debug" or "Release")
+default_config := "Debug"
+
+default:
+    @just --list
+
+# Configure cmake (auto-detects clang, ninja, lit)
+configure config=default_config coverage="false":
+    cmake \
+        -G Ninja \
+        -S . \
+        -B {{build_dir}}/{{config}} \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+        -DBUILD_MQT_CORE_TESTS=ON \
+        -DBUILD_MQT_CORE_MLIR=ON \
+        -DLLVM_EXTERNAL_LIT=$(which lit) \
+        -DENABLE_COVERAGE={{coverage}} \
+        -DCMAKE_BUILD_TYPE={{config}} \
+        -DGIT_EXECUTABLE=$(which git)
+    ln -sf {{build_dir}}/{{config}}/compile_commands.json compile_commands.json
+
+# Build the mqt-cc compiler
+build: configure (_build "mqt-cc")
+
+# Alias for build
+mqt-cc: configure (_build "mqt-cc")
+
+# Generate MLIR dialect documentation
+mlir-doc: configure (_build "mlir-doc")
+
+# Run the full test suite (configure + build all + ctest)
+test config="Debug": (configure config) (_build "all" config)
+    ctest --test-dir {{build_dir}}/{{config}} -C {{config}} -j {{jobs}} --output-on-failure
+
+# Run only the QCO quaternion merge unit tests (faster iteration)
+test-qco config="Debug": (configure config) (_build "mqt-core-mlir-unittest-optimizations" config)
+    {{build_dir}}/{{config}}/mlir/unittests/Dialect/QCO/Transforms/Optimizations/mqt-core-mlir-unittest-optimizations
+
+# Delete coverage data (.gcda files) from a previous run
+clean-coverage config="Debug":
+    find {{build_dir}}/{{config}} -name "*.gcda" -delete 2>/dev/null || true
+
+# Generate an HTML coverage report at build/Debug/coverage.html (requires gcovr and llvm-cov)
+coverage: (configure "Debug" "true") clean-coverage (_build "all")
+    # Ignore test failures so gcovr still generates the report
+    -ctest --test-dir {{build_dir}}/Debug -C Debug -j {{jobs}} --output-on-failure
+    gcovr --root . \
+        --exclude '.*/test/.*' \
+        --exclude './test/.*' \
+        --exclude '.*/_deps/.*' \
+        --gcov-executable "llvm-cov gcov" \
+        --html --html-details \
+        -o {{build_dir}}/Debug/coverage.html \
+        {{build_dir}}/Debug/
+    @echo "Coverage report: {{build_dir}}/Debug/coverage.html"
+
+# Run quantum-opt with the merge-rotation-gates pass on an MLIR file
+run file="test3.mlir" config=default_config:
+    {{build_dir}}/{{config}}/mlir/tools/quantum-opt/quantum-opt \
+        --merge-rotation-gates {{file}}
+
+# Run quantum-opt with quaternion folding enabled
+run-quat file="test.mlir" config=default_config:
+    {{build_dir}}/{{config}}/mlir/tools/quantum-opt/quantum-opt \
+        --pass-pipeline='builtin.module(merge-rotation-gates{quaternion-folding})' {{file}}
+
+# Run quaternion folding on the in-tree test file
+run-test config=default_config:
+    {{build_dir}}/{{config}}/mlir/tools/quantum-opt/quantum-opt \
+        --pass-pipeline='builtin.module(merge-rotation-gates{quaternion-folding})' \
+        mlir/test/Dialect/MQTOpt/Transforms/quantum-merge-rotation-gates.mlir
+
+# Run clang-tidy on QCO optimization sources
+lint config=default_config:
+    clang-tidy -p {{build_dir}}/{{config}} --extra-arg=-std=c++20 \
+        --header-filter='mlir/(lib|tools|unittests)/.*' \
+        mlir/lib/Dialect/QCO/Transforms/Optimizations/QuaternionMergeRotationGates.cpp \
+        mlir/unittests/Dialect/QCO/Transforms/Optimizations/test_qco_quaternion_merge.cpp
+
+# Remove all build artifacts
+clean:
+    rm -rf {{build_dir}}
+
+# --- Internal helpers ---
+
+[private]
+_build target config=default_config:
+    cmake --build {{build_dir}}/{{config}} --target {{target}} --config {{config}} --jobs {{jobs}}

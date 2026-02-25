@@ -1,0 +1,275 @@
+module {
+  func.func @testMergeRxGates() {
+    %q0_0 = qco.alloc : !qco.qubit
+    %c_0 = arith.constant 1.0 : f64
+    %c_1 = arith.constant 2.0 : f64
+    %q0_1 = qco.ry(%c_0) %q0_0 : !qco.qubit -> !qco.qubit
+    %q0_2 = qco.rz(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+    %q0_3 = qco.rz(%c_1) %q0_2 : !qco.qubit -> !qco.qubit
+    %q0_4 = qco.ry(%c_1) %q0_3 : !qco.qubit -> !qco.qubit
+    %q0_5 = qco.rz(%c_1) %q0_4 : !qco.qubit -> !qco.qubit
+    %q0_6 = qco.ry(%c_1) %q0_5 : !qco.qubit -> !qco.qubit
+    qco.sink %q0_6 : !qco.qubit
+    return
+  }
+}
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0_0 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant -2.0360075460227076 : f64
+//     %c_1 = arith.constant 4.157656961105587 : f64
+//     %q0_1 = qco.rz(%c_0) %q0_0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.rz(%c_1) %q0_1 : !qco.qubit -> !qco.qubit
+//
+//     qco.sink %q0_2 : !qco.qubit
+//
+//     return
+//   }
+// }
+
+module {
+  func.func @testMergeRxGates() {
+    %q0_0 = qco.alloc : !qco.qubit
+    %c_0 = arith.constant 1.000000e+00 : f64
+    %q0_1 = qco.rx(%c_0) %q0_0 : !qco.qubit -> !qco.qubit
+    %q0_2 = qco.rx(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+    // %q0_3 = qco.rx(%c_0) %q0_2 : !qco.qubit -> !qco.qubit
+    // %q0_4 = qco.ry(%c_0) %q0_3 : !qco.qubit -> !qco.qubit
+
+    qco.sink %q0_2 : !qco.qubit
+
+    return
+  }
+}
+//
+// %res_ctrl, %res_tgt:2 = qco.ctrl(%ctrl) targets(%a0 = %q0, %a1 = %q1) {
+//     %a0_1, %a1_1 = qco.swap %a0, %a1 : !qco.qubit, !qco.qubit -> !qco.qubit, !qco.qubit
+//     qco.yield %a0_1, %a1_1
+// } : ({!qco.qubit}, {!qco.qubit, !qco.qubit}) -> ({!qco.qubit}, {!qco.qubit, !qco.qubit})
+//
+// module {
+//   func.func @example() {
+//     // Allocate qubits (individual allocation)
+//     %q0_0 = qco.alloc : !qco.qubit
+//     %q1_0 = qco.alloc : !qco.qubit
+//
+//     // Define some constants for the U gate parameters
+//     %theta = arith.constant 1.0 : f64
+//     %phi = arith.constant 0.5 : f64
+//     %lambda = arith.constant 0.25 : f64
+//
+//     // First ctrl: q0 controls, q1 is target
+//     %q0_1, %q1_1 = qco.ctrl(%q0_0) targets(%q1c_0 = %q1_0) {
+//       %q1c_1 = qco.u(%theta, %phi, %lambda) %q1c_0 : !qco.qubit -> !qco.qubit
+//       qco.yield %q1c_1
+//     } : ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//     // Second ctrl: q1 controls, q0 is target
+//     // Note: Must use %q1_1 (not %q1_0) due to value semantics
+//     %q1_2, %q0_2 = qco.ctrl(%q1_1) targets(%q0c_0 = %q0_1) {
+//       %q0c_1 = qco.u(%theta, %phi, %lambda) %q0c_0 : !qco.qubit -> !qco.qubit
+//       qco.yield %q0c_1
+//     } : ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//     qco.sink %q0_2 : !qco.qubit
+//     qco.sink %q1_2 : !qco.qubit
+//     return
+//   }
+// }
+
+// module {
+//   func.func @scfIfTest(%cond: i1) {
+//     %0 = qco.alloc : !qco.qubit
+//     %cst = arith.constant 1.0 : f64
+//     %1 = qco.ry(%cst) %0 : !qco.qubit -> !qco.qubit
+//
+//     // qubit %1 used in both branches - multiple uses
+//     %2 = scf.if %cond -> !qco.qubit {
+//       %t = qco.rz(%cst) %1 : !qco.qubit -> !qco.qubit
+//       scf.yield %t : !qco.qubit
+//     } else {
+//       %e = qco.rx(%cst) %1 : !qco.qubit -> !qco.qubit
+//       scf.yield %e : !qco.qubit
+//     }
+//
+//     qco.sink %2 : !qco.qubit
+//     return
+//   }
+// }
+
+
+// module {
+//     func.func @mergeControledGates() {
+//       %q0_0 = qco.alloc : !qco.qubit
+//       %q1_0 = qco.alloc : !qco.qubit
+//
+//       %theta = arith.constant 1.0 : f64
+//       %phi = arith.constant 0.5 : f64
+//       %lambda = arith.constant 0.25 : f64
+//
+//       // First: controlled(q0) u(...) q1
+//       %q0_1, %q1_1 = qco.ctrl(%q0_0) targets(%t0 = %q1_0) {
+//         %t1 = qco.u(%theta, %phi, %lambda) %t0 : !qco.qubit -> !qco.qubit
+//         qco.yield %t1
+//       } : ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//       // Second: controlled(q0) u(...) q1  (same pattern)
+//       %q0_2, %q1_2 = qco.ctrl(%q0_1) targets(%t0 = %q1_1) {
+//         %t1 = qco.u(%theta, %phi, %lambda) %t0 : !qco.qubit -> !qco.qubit
+//         qco.yield %t1
+//       } : ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//       qco.sink %q0_2 : !qco.qubit
+//       qco.sink %q1_2 : !qco.qubit
+//       return
+//     }
+//   }
+
+
+// module {
+//   func.func @multipleUsers() {
+//     %q0 = qco.alloc : !qco.qubit
+//     %q1 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//
+//     %q0_1, %q1_1 = qco.ctrl(%q0) targets(%a0 = %q1){
+//         %a1 = qco.u(%c_0, %c_0, %c_0) %a0 : !qco.qubit -> !qco.qubit
+//         qco.yield %a1
+//     } : ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//
+//     %q0_2, %q1_2 = qco.ctrl(%q1) targets(%a20 = %q1_1) {
+//         %a21 = qco.u(%c_0, %c_0, %c_0) %a20 : !qco.qubit -> !qco.qubit
+//         qco.yield %a21
+//     }: ({!qco.qubit}, {!qco.qubit}) -> ({!qco.qubit}, {!qco.qubit})
+//
+//
+//     qco.sink %q0_2 : !qco.qubit
+//     qco.sink %q1_2 : !qco.qubit
+//     return
+//   }
+// }
+
+// module {
+//   func.func @multipleUsers() {
+//     %0 = qco.alloc : !qco.qubit
+//     %cst = arith.constant 1.000000e+00 : f64
+//     %1 = qco.ry(%cst) %0 : !qco.qubit -> !qco.qubit
+//
+//     // %1 is used by BOTH operations - violates linearity!
+//     %2 = qco.rz(%cst) %1 : !qco.qubit -> !qco.qubit
+//     %3 = qco.rz(%cst) %1 : !qco.qubit -> !qco.qubit  // <-- same %1 again!
+//
+//     qco.sink %2 : !qco.qubit
+//     qco.sink %3 : !qco.qubit
+//     return
+//   }
+// }
+
+// module {
+//     func.func @multipleUsers() {
+//         %q0 = qco.alloc : !qco.qubit
+//
+//         %q0_0, %q0_1 = qco.swap %q0, %q0 : !qco.qubit, !qco.qubit -> !qco.qubit, !qco.qubit
+//
+//         qco.sink %q0_0 : !qco.qubit
+//         qco.sink %q0_1 : !qco.qubit
+//         return
+//       }
+//   }
+
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0_0 = qco.alloc : !qco.qubit
+//     %q1_0 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//     %q0_1 = qco.rx(%c_0) %q0_0 : !qco.qubit -> !qco.qubit
+//     %q1_1 = qco.rx(%c_0) %q1_0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.ry(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+//     // %q0_3 = qco.rx(%c_0) %q0_2 : !qco.qubit -> !qco.qubit
+//     // %q0_4 = qco.ry(%c_0) %q0_3 : !qco.qubit -> !qco.qubit
+//
+//     qco.sink %q1_1 : !qco.qubit
+//     qco.sink %q0_1 : !qco.qubit
+//
+//     return
+//   }
+// }
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0 = qco.alloc : !qco.qubit
+//     %q1 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//     %q0_1 = qco.rx(%c_0) %q0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.h %q0_1 : !qco.qubit -> !qco.qubit
+//     %q0_3 = qco.rx(%c_0) %q0_2 : !qco.qubit -> !qco.qubit
+//
+//     qco.sink %q0_3 : !qco.qubit
+//     return
+//   }
+// }
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0 = qco.alloc : !qco.qubit
+//     %q1 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//     %q0_1 = qco.rx(%c_0) %q0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.h %q1 : !qco.qubit -> !qco.qubit
+//     %q0_3 = qco.rx(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+//
+//     // qco.sink %q0_2 : !qco.qubit
+//     // qco.sink %q0_3 : !qco.qubit
+//     return
+//   }
+// }
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0 = qco.alloc : !qco.qubit
+//     %q1 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//     %q0_1 = qco.rx(%c_0) %q0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.ry(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+//     %q1_1 = qco.cx(%q0_1) %q1 : !qco.qubit -> !qco.qubit
+//
+//     qco.sink %q0_2 : !qco.qubit
+//     qco.sink %q1_1 : !qco.qubit
+//
+//     return
+//   }
+// }
+
+// module {
+//   func.func @testMergeRxGates() {
+//     %q0_0 = qco.alloc : !qco.qubit
+//     %c_0 = arith.constant 1.000000e+00 : f64
+//     %q0_1 = qco.rx(%c_0) %q0_0 : !qco.qubit -> !qco.qubit
+//     %q0_2 = qco.rx(%c_0) %q0_1 : !qco.qubit -> !qco.qubit
+//     %q0_3 = qco.ry(%c_0) %q0_2 : !qco.qubit -> !qco.qubit
+//     %q0_4 = qco.ry(%c_0) %q0_3 : !qco.qubit -> !qco.qubit
+//
+//     qco.sink %q0_4 : !qco.qubit
+//
+//     return
+//   }
+// }
+
+// OUTCOME:
+// module {
+//   func.func @testMergeRxGates() {
+//     %cst = arith.constant -1.5707963267948966 : f64
+//     %cst_0 = arith.constant 1.5707963267948966 : f64
+//     %cst_1 = arith.constant 1.9999999999999998 : f64
+//     %c0 = arith.constant 0 : index
+//     %alloc = memref.alloc() : memref<1x!mqtopt.Qubit>
+//     %0 = memref.load %alloc[%c0] : memref<1x!mqtopt.Qubit>
+//     %out_qubits = mqtopt.u(%cst_0, %cst_1, %cst) %0 : !mqtopt.Qubit
+//     memref.store %out_qubits, %alloc[%c0] : memref<1x!mqtopt.Qubit>
+//     memref.dealloc %alloc : memref<1x!mqtopt.Qubit>
+//     return
+//   }
+// 3
