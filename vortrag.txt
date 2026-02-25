@@ -1,0 +1,10 @@
+evtl. bisschen basics zu mlir
+basics zu gatemerging; warum weniger gates
+warum haben wir gemacht
+warum nicht trivial
+warum ist das cool/hilfreich
+evaluation...
+fragen warum hast du das gemacht ideen/konzpetuelle evtl future work sachen. mehr konferenz weniger prüèung
+
+20min
+- Robert nur online
