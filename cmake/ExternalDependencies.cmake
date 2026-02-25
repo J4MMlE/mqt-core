@@ -38,10 +38,16 @@ if(BUILD_MQT_CORE_MLIR)
   set(BUILD_JEFF_MLIR_TRANSLATION
       OFF
       CACHE BOOL "Disable building the translation submodule of jeff-mlir")
+
+  # GIT_TAG c7e0d0340e470c9097a79a430b633b97dcd864e9
   FetchContent_Declare(
     jeff-mlir
     GIT_REPOSITORY https://github.com/PennyLaneAI/jeff-mlir.git
-    GIT_TAG v0.1.0)
+    GIT_TAG v0.1.0
+    PATCH_COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      ${PROJECT_SOURCE_DIR}/cmake/patches/jeff-mlir-SetupMLIR.cmake
+      <SOURCE_DIR>/cmake/SetupMLIR.cmake)
   list(APPEND FETCH_PACKAGES jeff-mlir)
 endif()
 
