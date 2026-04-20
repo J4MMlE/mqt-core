@@ -275,8 +275,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeRXRZGates) {
   EXPECT_EQ(countOps<RXOp>(), 0);
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(1.00000000000000, -0.570796326794897, 1.57079632679490);
-  expectGPhaseParam(-0.500000000000000);
+  expectUGateParams(1., -0.570796326794897, 1.57079632679490);
+  expectGPhaseParam(-0.5);
 }
 
 /**
@@ -317,8 +317,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeRYRZGates) {
   EXPECT_EQ(countOps<RYOp>(), 0);
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(1.00000000000000, 1.00000000000000, 0.);
-  expectGPhaseParam(-0.500000000000000);
+  expectUGateParams(1., 1., 0.);
+  expectGPhaseParam(-0.5);
 }
 
 /**
@@ -332,8 +332,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeRZRXGates) {
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<RXOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(1.00000000000000, -1.57079632679490, 2.57079632679490);
-  expectGPhaseParam(-0.500000000000000);
+  expectUGateParams(1., -1.57079632679490, 2.57079632679490);
+  expectGPhaseParam(-0.5);
 }
 
 /**
@@ -347,8 +347,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeRZRYGates) {
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<RYOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(1.00000000000000, 0., 1.00000000000000);
-  expectGPhaseParam(-0.500000000000000);
+  expectUGateParams(1., 0., 1.);
+  expectGPhaseParam(-0.5);
 }
 
 /**
@@ -458,7 +458,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergePRXGates) {
   EXPECT_EQ(countOps<POp>(), 0);
   EXPECT_EQ(countOps<RXOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(1.00000000000000, -1.57079632679490, 2.57079632679490);
+  expectUGateParams(1., -1.57079632679490, 2.57079632679490);
   expectGPhaseParam(1.11022302462516e-16);
 }
 
@@ -503,7 +503,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeRRXGates) {
 /**
  * @brief Test: P->P should merge into a single U gate
  */
-TEST_F(MergeSingleQubitRotationGatesTest, noMergePPGates) {
+TEST_F(MergeSingleQubitRotationGatesTest, mergePPGates) {
   ASSERT_TRUE(testGateMerge({{.type = GateType::P, .angles = {1.}},
                              {.type = GateType::P, .angles = {1.}}})
                   .succeeded());
@@ -705,8 +705,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeConsecutiveWithGateInBetween) {
 // ##################################################
 
 /**
- * @brief Test: RZ(PI)->RY(PI)->RX(PI) should merge into U(0, 0, 0) or U(0, 2 *
- * PI, 0)
+ * @brief Test: RZ(PI)->RY(PI)->RX(PI) should merge into U(0, 0, 0)
  */
 TEST_F(MergeSingleQubitRotationGatesTest, numericalRotationIdentity) {
   ASSERT_TRUE(testGateMerge({{.type = GateType::RZ, .angles = {PI}},
@@ -717,8 +716,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, numericalRotationIdentity) {
   EXPECT_EQ(countOps<RYOp>(), 0);
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(0, 0, 0.);
-  expectGPhaseParam(0);
+  expectUGateParams(0., 0., 0.);
+  expectGPhaseParam(0.);
 }
 
 /**
@@ -735,7 +734,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, numericalRotationIdentity2) {
   EXPECT_EQ(countOps<RZOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
   expectUGateParams(0., 0., 0.);
-  expectGPhaseParam(0.0);
+  expectGPhaseParam(0.);
 }
 
 /**
@@ -765,7 +764,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, numericalGimbalLock) {
   EXPECT_EQ(countOps<RXOp>(), 0);
   EXPECT_EQ(countOps<RYOp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(0, -PI, 0.);
+  expectUGateParams(0., -PI, 0.);
   expectGPhaseParam(1.57079632679490);
 }
 
@@ -780,7 +779,7 @@ TEST_F(MergeSingleQubitRotationGatesTest, numericalAccuracyRRSameAxis) {
   EXPECT_EQ(countOps<UOp>(), 1);
   EXPECT_EQ(countOps<ROp>(), 0);
   EXPECT_EQ(countOps<GPhaseOp>(), 1);
-  expectUGateParams(2.00000000000000, -0.570796326794897, 0.570796326794897);
+  expectUGateParams(2., -0.570796326794897, 0.570796326794897);
   expectGPhaseParam(0.0);
 }
 

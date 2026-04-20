@@ -91,7 +91,7 @@ def global_phase(gate_type: str, *angles: float) -> float:
         ValueError: If gate_type is not a recognized gate.
     """
     if gate_type in {"RX", "RY", "RZ", "R"}:
-        return 0
+        return 0.0
     if gate_type == "P":
         return angles[0] / 2
     if gate_type == "U":
