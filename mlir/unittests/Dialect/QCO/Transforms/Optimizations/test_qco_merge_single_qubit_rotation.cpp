@@ -163,7 +163,7 @@ protected:
   }
 
   Value buildRotations(llvm::ArrayRef<RotationGate> rotations, Value& q) {
-    Value qubit = q;
+    auto qubit = q;
 
     for (const auto& gate : rotations) {
       switch (gate.type) {
@@ -594,10 +594,8 @@ TEST_F(MergeSingleQubitRotationGatesTest, noMergeSingleRZGate) {
 TEST_F(MergeSingleQubitRotationGatesTest, dontMergeGatesFromDifferentQubits) {
   auto q = builder.allocQubitRegister(2);
 
-  const Value qubit1 = q[0];
-  const Value qubit2 = q[1];
-  builder.rx(1.0, qubit1);
-  builder.ry(1.0, qubit2);
+  builder.rx(1.0, q[0]);
+  builder.ry(1.0, q[1]);
   module = builder.finalize();
 
   ASSERT_TRUE(runMergePass(module.get()).succeeded());
@@ -651,18 +649,19 @@ TEST_F(MergeSingleQubitRotationGatesTest, mergeManyGates) {
  * U with the unmergeable in between.
  */
 TEST_F(MergeSingleQubitRotationGatesTest, mergeManyWithUnmergeable) {
-  auto q = builder.allocQubitRegister(1);
-  Value qubit = buildRotations({{.type = GateType::U, .angles = {1., 2., 3.}},
-                                {.type = GateType::RX, .angles = {1.}},
-                                {.type = GateType::RY, .angles = {2.}},
-                                {.type = GateType::RZ, .angles = {3.}}},
-                               q[0]);
-  qubit = builder.h(qubit);
-  qubit = buildRotations({{.type = GateType::RZ, .angles = {4.}},
-                          {.type = GateType::RY, .angles = {5.}},
-                          {.type = GateType::RX, .angles = {6.}},
-                          {.type = GateType::U, .angles = {4., 5., 6.}}},
-                         qubit);
+  auto reg = builder.allocQubitRegister(1);
+  auto q = reg[0];
+  q = buildRotations({{.type = GateType::U, .angles = {1., 2., 3.}},
+                      {.type = GateType::RX, .angles = {1.}},
+                      {.type = GateType::RY, .angles = {2.}},
+                      {.type = GateType::RZ, .angles = {3.}}},
+                     q);
+  q = builder.h(q);
+  q = buildRotations({{.type = GateType::RZ, .angles = {4.}},
+                      {.type = GateType::RY, .angles = {5.}},
+                      {.type = GateType::RX, .angles = {6.}},
+                      {.type = GateType::U, .angles = {4., 5., 6.}}},
+                     q);
 
   module = builder.finalize();
 
