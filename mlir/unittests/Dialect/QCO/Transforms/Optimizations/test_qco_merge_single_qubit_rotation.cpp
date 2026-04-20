@@ -228,7 +228,9 @@ protected:
 
 } // namespace
 
-// Note: All expected values are computed using SymPy's quaternion algebra:
+// Note: All expected values are computed using the reference script
+// compute_expected_merge_single_qubit_rotation.py in this directory, which uses
+// SymPy's quaternion algebra:
 // https://docs.sympy.org/latest/modules/algebras.html#module-sympy.algebras.Quaternion
 
 // ##################################################
