@@ -22,7 +22,6 @@
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/BuiltinAttributes.h>
-#include <mlir/IR/IRMapping.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/OperationSupport.h>
 #include <mlir/IR/PatternMatch.h>
@@ -66,13 +65,18 @@ using namespace mlir::qco;
  * @return success() if replaced, failure() if a general P gate should be used.
  */
 static LogicalResult tryReplaceWithNamedPhaseGate(double angle, PowOp op,
-                                                  PatternRewriter& rewriter) {
+                                                  PatternRewriter& rewriter,
+                                                  bool insideModifier) {
   constexpr double eps = 1e-12;
   const double norm = utils::normalizeAngle(angle);
   const double pi = std::numbers::pi;
 
   if (std::abs(norm) < eps) {
-    rewriter.replaceOp(op, op.getQubitsIn());
+    if (insideModifier) {
+      rewriter.replaceOpWithNewOp<IdOp>(op, op.getInputTarget(0));
+    } else {
+      rewriter.replaceOp(op, op.getQubitsIn());
+    }
     return success();
   }
   if (std::abs(std::abs(norm) - pi) < eps) {
@@ -165,7 +169,15 @@ struct ErasePow0 final : OpRewritePattern<PowOp> {
       return failure();
     }
 
-    rewriter.replaceOp(op, op.getQubitsIn());
+    if (llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+      if (op.getNumTargets() == 1) {
+        rewriter.replaceOpWithNewOp<IdOp>(op, op.getInputTarget(0));
+      } else {
+        return failure();
+      }
+    } else {
+      rewriter.replaceOp(op, op.getQubitsIn());
+    }
     return success();
   }
 };
@@ -249,15 +261,14 @@ struct MoveCtrlOutside final : OpRewritePattern<PowOp> {
           return PowOp::create(
                      rewriter, op.getLoc(), ctrlTargetArgs, exponent,
                      [&](ValueRange powArgs) -> llvm::SmallVector<Value> {
-                       IRMapping mapping;
-                       auto* innerBody = innerCtrlOp.getBody();
-                       for (size_t i = 0; i < numTargets; ++i) {
-                         mapping.map(innerBody->getArgument(i), powArgs[i]);
-                       }
-                       auto* cloned = rewriter.clone(
-                           *innerCtrlOp.getBodyUnitary().getOperation(),
-                           mapping);
-                       return cloned->getResults();
+                       auto* powBody = rewriter.getInsertionBlock();
+                       rewriter.inlineBlockBefore(innerCtrlOp.getBody(),
+                                                  powBody, powBody->begin(),
+                                                  powArgs);
+                       auto yieldedValues =
+                           llvm::to_vector(powBody->back().getOperands());
+                       rewriter.eraseOp(&powBody->back());
+                       return yieldedValues;
                      })
               .getResults();
         });
@@ -282,11 +293,20 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     auto* innerOp = op.getBodyUnitary().getOperation();
     const double r = op.getExponentValue();
     auto loc = op.getLoc();
+    const bool insideModifier =
+        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
 
     // Folds for X/Y/SX/SXdg emit an additional GPhase op, which is not
     // allowed when nested inside a modifier (single-child constraint).
-    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) &&
-        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
+      return failure();
+    }
+
+    // Even-parity folds for multi-qubit hermitian gates produce identity.
+    // Bail out before inlining when inside a modifier, since we cannot
+    // represent a multi-qubit identity as a single body unitary.
+    if (insideModifier && llvm::isa<ECROp, SWAPOp>(innerOp) &&
+        utils::isIntegerExponent(r) && static_cast<int64_t>(r) % 2 == 0) {
       return failure();
     }
 
@@ -381,7 +401,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             .Case<ZOp>([&](auto) {
               const double angle = r * std::numbers::pi;
               if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -396,7 +416,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             .Case<SOp>([&](auto) {
               const double angle = r * std::numbers::pi / 2.0;
               if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -409,7 +429,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             .Case<SdgOp>([&](auto) {
               const double angle = r * -std::numbers::pi / 2.0;
               if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -422,7 +442,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             .Case<TOp>([&](auto) {
               const double angle = r * std::numbers::pi / 4.0;
               if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -435,7 +455,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             .Case<TdgOp>([&](auto) {
               const double angle = r * -std::numbers::pi / 4.0;
               if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -479,19 +499,24 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
                                             r * (-std::numbers::pi / 2.0)));
               return success();
             })
-            // --- Hermitian gates (integer exponent): even → erase, odd → gate
-            // --- pow(n) { h/ecr } → id (n even) | h/ecr (n odd)
-            .Case<HOp, ECROp>([&](auto gate) {
+            // --- Hermitian gates (integer exponent): even → id, odd → gate
+            // --- pow(n) { h } → id (n even) | h (n odd)
+            .Case<HOp>([&](auto gate) {
               const auto n = static_cast<int64_t>(r);
               if (n % 2 == 0) {
-                rewriter.replaceOp(op, op.getQubitsIn());
+                if (insideModifier) {
+                  rewriter.replaceOpWithNewOp<IdOp>(op, op.getInputTarget(0));
+                } else {
+                  rewriter.replaceOp(op, op.getQubitsIn());
+                }
               } else {
                 rewriter.replaceOp(op, gate->getResults());
               }
               return success();
             })
-            // pow(n) { swap } → id (n even) | swap (n odd)
-            .Case<SWAPOp>([&](auto gate) {
+            // pow(n) { ecr/swap } → id (n even) | ecr/swap (n odd)
+            // Note: even + insideModifier is rejected before inlining.
+            .Case<ECROp, SWAPOp>([&](auto gate) {
               const auto n = static_cast<int64_t>(r);
               if (n % 2 == 0) {
                 rewriter.replaceOp(op, op.getQubitsIn());

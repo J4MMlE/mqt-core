@@ -58,13 +58,18 @@ using namespace mlir::qc;
  * @return success() if replaced, failure() if a general P gate should be used.
  */
 static LogicalResult tryReplaceWithNamedPhaseGate(double angle, PowOp op,
-                                                  PatternRewriter& rewriter) {
+                                                  PatternRewriter& rewriter,
+                                                  bool insideModifier) {
   constexpr double eps = 1e-10;
   const double norm = utils::normalizeAngle(angle);
   const double pi = std::numbers::pi;
 
   if (std::abs(norm) < eps) {
-    rewriter.eraseOp(op);
+    if (insideModifier) {
+      rewriter.replaceOpWithNewOp<IdOp>(op, op.getTarget(0));
+    } else {
+      rewriter.eraseOp(op);
+    }
     return success();
   }
   if (std::abs(std::abs(norm) - pi) < eps) {
@@ -154,7 +159,15 @@ struct ErasePow0 final : OpRewritePattern<PowOp> {
     if (op.getExponentValue() != 0.0) {
       return failure();
     }
-    rewriter.eraseOp(op);
+    if (llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+      if (op.getNumTargets() == 1) {
+        rewriter.replaceOpWithNewOp<IdOp>(op, op.getTarget(0));
+      } else {
+        return failure();
+      }
+    } else {
+      rewriter.eraseOp(op);
+    }
     return success();
   }
 };
@@ -229,11 +242,12 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     auto* innerOp = op.getBodyUnitary().getOperation();
     const double r = op.getExponentValue();
     auto loc = op.getLoc();
+    const bool insideModifier =
+        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
 
     // Folds for X/Y/SX/SXdg emit an additional GPhase op, which is not
     // allowed when nested inside a modifier (single-child constraint).
-    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) &&
-        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
       return failure();
     }
 
@@ -298,7 +312,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
         // pow(r) { z } → named gate if angle matches, else p(r*π)
         .Case<ZOp>([&](auto) {
           const double angle = r * std::numbers::pi;
-          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                     insideModifier))) {
             return success();
           }
           rewriter.replaceOpWithNewOp<POp>(
@@ -345,7 +360,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
         // --- pow(r) { s } → named gate if angle matches, else p(r*π/2)
         .Case<SOp>([&](auto) {
           const double angle = r * std::numbers::pi / 2.0;
-          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                     insideModifier))) {
             return success();
           }
           rewriter.replaceOpWithNewOp<POp>(
@@ -357,7 +373,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
         // pow(r) { sdg } → named gate if angle matches, else p(-r*π/2)
         .Case<SdgOp>([&](auto) {
           const double angle = r * -std::numbers::pi / 2.0;
-          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                     insideModifier))) {
             return success();
           }
           rewriter.replaceOpWithNewOp<POp>(
@@ -369,7 +386,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
         // pow(r) { t } → named gate if angle matches, else p(r*π/4)
         .Case<TOp>([&](auto) {
           const double angle = r * std::numbers::pi / 4.0;
-          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                     insideModifier))) {
             return success();
           }
           rewriter.replaceOpWithNewOp<POp>(
@@ -381,7 +399,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
         // pow(r) { tdg } → named gate if angle matches, else p(-r*π/4)
         .Case<TdgOp>([&](auto) {
           const double angle = r * -std::numbers::pi / 4.0;
-          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter))) {
+          if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                     insideModifier))) {
             return success();
           }
           rewriter.replaceOpWithNewOp<POp>(
@@ -425,28 +444,35 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
                                         r * (-std::numbers::pi / 2.0)));
           return success();
         })
-        // --- Hermitian gates (integer exponent): even → erase, odd → gate ---
-        // pow(n) { h/ecr } → erase (n even) | h/ecr (n odd)
-        .Case<HOp, ECROp>([&](auto gate) {
+        // --- Hermitian gates (integer exponent): even → erase/id, odd → gate
+        // --- pow(n) { h } → id (n even) | h (n odd)
+        .Case<HOp>([&](auto gate) {
           if (!utils::isIntegerExponent(r)) {
             return failure();
           }
           const auto n = static_cast<int64_t>(r);
           if (n % 2 == 0) {
-            rewriter.eraseOp(op);
+            if (insideModifier) {
+              rewriter.replaceOpWithNewOp<IdOp>(op, op.getTarget(0));
+            } else {
+              rewriter.eraseOp(op);
+            }
           } else {
             rewriter.moveOpBefore(gate, op);
             rewriter.eraseOp(op);
           }
           return success();
         })
-        // pow(n) { swap } → erase (n even) | swap (n odd)
-        .Case<SWAPOp>([&](auto gate) {
+        // pow(n) { ecr/swap } → erase (n even) | ecr/swap (n odd)
+        .Case<ECROp, SWAPOp>([&](auto gate) {
           if (!utils::isIntegerExponent(r)) {
             return failure();
           }
           const auto n = static_cast<int64_t>(r);
           if (n % 2 == 0) {
+            if (insideModifier) {
+              return failure();
+            }
             rewriter.eraseOp(op);
           } else {
             rewriter.moveOpBefore(gate, op);
