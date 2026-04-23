@@ -56,7 +56,12 @@ struct MoveCtrlOutside final : OpRewritePattern<InvOp> {
 };
 
 /**
- * @brief Reorder inv around pow, i.e., `inv(pow(p, g)) => pow(p, inv(g))`.
+ * @brief Absorb inv into pow by negating the exponent, i.e.,
+ * `inv(pow(p){U}) => pow(-p){U}`.
+ *
+ * This is always valid for unitaries: (U^p)† = U^{-p}.
+ * Downstream patterns (e.g., NegPowToInvPow) can then rewrite
+ * pow(-p){U} => pow(p){inv(U)} when the exponent is an integer.
  */
 struct MovePowOutside final : OpRewritePattern<InvOp> {
   using OpRewritePattern::OpRewritePattern;
@@ -68,13 +73,11 @@ struct MovePowOutside final : OpRewritePattern<InvOp> {
       return failure();
     }
     const double exponent = innerPow.getExponentValue();
-    rewriter.replaceOpWithNewOp<PowOp>(invOp, exponent, [&] {
-      InvOp::create(rewriter, invOp.getLoc(), [&] {
-        auto* invBody = rewriter.getInsertionBlock();
-        rewriter.inlineBlockBefore(innerPow.getBody(), invBody,
-                                   invBody->begin());
-        rewriter.eraseOp(&invBody->back()); // erase the inlined YieldOp
-      });
+    rewriter.replaceOpWithNewOp<PowOp>(invOp, -exponent, [&] {
+      auto* powBody = rewriter.getInsertionBlock();
+      rewriter.inlineBlockBefore(innerPow.getBody(), powBody,
+                                 powBody->begin());
+      rewriter.eraseOp(&powBody->back()); // erase the inlined YieldOp
     });
     return success();
   }
