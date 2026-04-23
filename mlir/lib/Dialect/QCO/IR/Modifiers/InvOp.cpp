@@ -108,8 +108,7 @@ struct MovePowOutside final : OpRewritePattern<InvOp> {
           auto* powBody = rewriter.getInsertionBlock();
           rewriter.inlineBlockBefore(innerPow.getBody(), powBody,
                                      powBody->begin(), powArgs);
-          auto yieldedValues =
-              llvm::to_vector(powBody->back().getOperands());
+          auto yieldedValues = llvm::to_vector(powBody->back().getOperands());
           rewriter.eraseOp(&powBody->back());
           return yieldedValues;
         });

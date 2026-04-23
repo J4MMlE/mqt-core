@@ -30,7 +30,6 @@
 
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <numbers>
 #include <optional>
 
@@ -306,7 +305,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     // Bail out before inlining when inside a modifier, since we cannot
     // represent a multi-qubit identity as a single body unitary.
     if (insideModifier && llvm::isa<ECROp, SWAPOp>(innerOp) &&
-        utils::isIntegerExponent(r) && static_cast<int64_t>(r) % 2 == 0) {
+        utils::isIntegerExponent(r) && utils::isEvenExponent(r)) {
       return failure();
     }
 
@@ -400,8 +399,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // pow(r) { z } → named gate if angle matches, else p(r*π)
             .Case<ZOp>([&](auto) {
               const double angle = r * std::numbers::pi;
-              if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
+              if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                         insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -415,8 +414,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // --- pow(r) { s } → named gate if angle matches, else p(r*π/2)
             .Case<SOp>([&](auto) {
               const double angle = r * std::numbers::pi / 2.0;
-              if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
+              if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                         insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -428,8 +427,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // pow(r) { sdg } → named gate if angle matches, else p(-r*π/2)
             .Case<SdgOp>([&](auto) {
               const double angle = r * -std::numbers::pi / 2.0;
-              if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
+              if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                         insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -441,8 +440,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // pow(r) { t } → named gate if angle matches, else p(r*π/4)
             .Case<TOp>([&](auto) {
               const double angle = r * std::numbers::pi / 4.0;
-              if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
+              if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                         insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -454,8 +453,8 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // pow(r) { tdg } → named gate if angle matches, else p(-r*π/4)
             .Case<TdgOp>([&](auto) {
               const double angle = r * -std::numbers::pi / 4.0;
-              if (succeeded(
-                      tryReplaceWithNamedPhaseGate(angle, op, rewriter, insideModifier))) {
+              if (succeeded(tryReplaceWithNamedPhaseGate(angle, op, rewriter,
+                                                         insideModifier))) {
                 return success();
               }
               rewriter.replaceOpWithNewOp<POp>(
@@ -502,8 +501,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // --- Hermitian gates (integer exponent): even → id, odd → gate
             // --- pow(n) { h } → id (n even) | h (n odd)
             .Case<HOp>([&](auto gate) {
-              const auto n = static_cast<int64_t>(r);
-              if (n % 2 == 0) {
+              if (utils::isEvenExponent(r)) {
                 if (insideModifier) {
                   rewriter.replaceOpWithNewOp<IdOp>(op, op.getInputTarget(0));
                 } else {
@@ -517,8 +515,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
             // pow(n) { ecr/swap } → id (n even) | ecr/swap (n odd)
             // Note: even + insideModifier is rejected before inlining.
             .Case<ECROp, SWAPOp>([&](auto gate) {
-              const auto n = static_cast<int64_t>(r);
-              if (n % 2 == 0) {
+              if (utils::isEvenExponent(r)) {
                 rewriter.replaceOp(op, op.getQubitsIn());
               } else {
                 rewriter.replaceOp(op, gate->getResults());

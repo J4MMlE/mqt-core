@@ -24,7 +24,6 @@
 #include <mlir/Support/LogicalResult.h>
 
 #include <cmath>
-#include <cstdint>
 #include <numbers>
 
 using namespace mlir;
@@ -272,10 +271,6 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
       }
     }
 
-    // Set insertion point before the PowOp so that new ops (constants,
-    // arithmetic) are created outside the body region.
-    // rewriter.setInsertionPoint(op);
-
     return llvm::TypeSwitch<Operation*, LogicalResult>(innerOp)
         // --- Rotation gates: multiply angle by exponent ---
         // pow(r) { gphase(θ) } → gphase(r*θ)
@@ -450,8 +445,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
           if (!utils::isIntegerExponent(r)) {
             return failure();
           }
-          const auto n = static_cast<int64_t>(r);
-          if (n % 2 == 0) {
+          if (utils::isEvenExponent(r)) {
             if (insideModifier) {
               rewriter.replaceOpWithNewOp<IdOp>(op, op.getTarget(0));
             } else {
@@ -468,8 +462,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
           if (!utils::isIntegerExponent(r)) {
             return failure();
           }
-          const auto n = static_cast<int64_t>(r);
-          if (n % 2 == 0) {
+          if (utils::isEvenExponent(r)) {
             if (insideModifier) {
               return failure();
             }

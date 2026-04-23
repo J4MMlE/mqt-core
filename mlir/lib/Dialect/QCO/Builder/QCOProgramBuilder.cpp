@@ -811,7 +811,7 @@ ValueRange QCOProgramBuilder::pow(
   // Update tracking
   const auto& targetsOut = powOp.getQubitsOut();
   for (const auto& [target, targetOut] :
-       llvm::zip(innerTargetsOut, targetsOut)) {
+       llvm::zip_equal(innerTargetsOut, targetsOut)) {
     updateQubitTracking(target, targetOut);
   }
 
