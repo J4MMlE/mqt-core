@@ -87,7 +87,7 @@ static cl::opt<bool> disableMergeSingleQubitRotationGates(
  * @brief Load and parse a .qasm file via the legacy QuantumComputation path.
  */
 static OwningOpRef<ModuleOp> loadQASMFileLegacy(StringRef filename,
-                                                 MLIRContext* context) {
+                                                MLIRContext* context) {
   try {
     const ::qc::QuantumComputation qc =
         qasm3::Importer::importf(filename.str());

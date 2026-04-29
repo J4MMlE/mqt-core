@@ -29,7 +29,7 @@ namespace mlir::qc {
 [[nodiscard]] OwningOpRef<ModuleOp>
 translateQASM3ToQC(MLIRContext* context, const std::string& filename);
 
-[[nodiscard]] OwningOpRef<ModuleOp>
-translateQASM3ToQC(MLIRContext* context, std::istream& input);
+[[nodiscard]] OwningOpRef<ModuleOp> translateQASM3ToQC(MLIRContext* context,
+                                                       std::istream& input);
 
 } // namespace mlir::qc

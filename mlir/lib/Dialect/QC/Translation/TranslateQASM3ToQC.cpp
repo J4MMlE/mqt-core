@@ -26,9 +26,9 @@
 #include "qasm3/passes/TypeCheckPass.hpp"
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallDenseSet.h>
 #include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
@@ -190,7 +190,6 @@ static const llvm::StringMap<GateFn> GATE_DISPATCH = buildGateDispatch();
 /// Local qubit scope used during compound gate body expansion.
 /// Maps argument name → vector of MLIR qubit Values.
 using QubitScope = llvm::StringMap<llvm::SmallVector<Value>>;
-
 
 /** AST visitor that translates a QASM3 program directly into the QC dialect.
  *
@@ -663,11 +662,12 @@ private:
 
       // Check that no qubit appears twice across targets and controls.
       llvm::SmallDenseSet<Value> seen;
-      for (auto q : llvm::concat<const Value>(iterQubits, posControls,
-                                              negControls)) {
+      for (auto q :
+           llvm::concat<const Value>(iterQubits, posControls, negControls)) {
         if (!seen.insert(q).second) {
-          throw qasm3::CompilerError(
-              "Duplicate qubit in gate '" + id + "' operands.", stmt->debugInfo);
+          throw qasm3::CompilerError("Duplicate qubit in gate '" + id +
+                                         "' operands.",
+                                     stmt->debugInfo);
         }
       }
 
