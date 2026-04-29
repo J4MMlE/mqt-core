@@ -918,8 +918,7 @@ public:
    * }
    * ```
    */
-  QCProgramBuilder& pow(double exponent,
-                        const llvm::function_ref<void()>& body);
+  QCProgramBuilder& pow(double exponent, const function_ref<void()>& body);
 
   //===--------------------------------------------------------------------===//
   // Deallocation

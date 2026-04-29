@@ -1196,7 +1196,7 @@ public:
    * @par Example:
    * ```c++
    * qubits_out = builder.pow(q0_in, 2.0,
-   *   [&](ValueRange qubits) -> llvm::SmallVector<Value> {
+   *   [&](ValueRange qubits) -> SmallVector<Value> {
    *     return {builder.s(qubits[0])};
    *   }
    * );
@@ -1210,7 +1210,7 @@ public:
    * ```
    */
   ValueRange pow(ValueRange qubits, double exponent,
-                 llvm::function_ref<llvm::SmallVector<Value>(ValueRange)> body);
+                 function_ref<SmallVector<Value>(ValueRange)> body);
 
   //===--------------------------------------------------------------------===//
   // Deallocation

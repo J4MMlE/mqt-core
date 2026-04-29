@@ -16,10 +16,8 @@
 #include "mlir/Dialect/QTensor/IR/QTensorOps.h"
 #include "mlir/Dialect/Utils/Utils.h"
 
-#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/STLFunctionalExtras.h>
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
@@ -792,9 +790,9 @@ QCOProgramBuilder::inv(ValueRange qubits,
   return targetsOut;
 }
 
-ValueRange QCOProgramBuilder::pow(
-    ValueRange qubits, double exponent,
-    llvm::function_ref<llvm::SmallVector<Value>(ValueRange)> body) {
+ValueRange
+QCOProgramBuilder::pow(ValueRange qubits, double exponent,
+                       function_ref<SmallVector<Value>(ValueRange)> body) {
   checkFinalized();
 
   auto powOp = PowOp::create(*this, qubits, exponent);

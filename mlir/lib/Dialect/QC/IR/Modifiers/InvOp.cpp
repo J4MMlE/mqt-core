@@ -64,8 +64,7 @@ struct MovePowOutside final : OpRewritePattern<InvOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(InvOp invOp,
                                 PatternRewriter& rewriter) const override {
-    auto innerPow =
-        llvm::dyn_cast<PowOp>(invOp.getBodyUnitary().getOperation());
+    auto innerPow = dyn_cast<PowOp>(invOp.getBodyUnitary().getOperation());
     if (!innerPow) {
       return failure();
     }

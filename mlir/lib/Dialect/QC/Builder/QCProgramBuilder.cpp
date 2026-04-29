@@ -14,7 +14,6 @@
 #include "mlir/Dialect/QC/IR/QCOps.h"
 #include "mlir/Dialect/Utils/Utils.h"
 
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
@@ -460,8 +459,8 @@ QCProgramBuilder& QCProgramBuilder::inv(const function_ref<void()>& body) {
   return *this;
 }
 
-QCProgramBuilder&
-QCProgramBuilder::pow(double exponent, const llvm::function_ref<void()>& body) {
+QCProgramBuilder& QCProgramBuilder::pow(double exponent,
+                                        const function_ref<void()>& body) {
   checkFinalized();
   PowOp::create(*this, exponent, body);
   return *this;

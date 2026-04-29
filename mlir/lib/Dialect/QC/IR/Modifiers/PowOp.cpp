@@ -14,7 +14,6 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/STLFunctionalExtras.h>
 #include <llvm/ADT/TypeSwitch.h>
-#include <llvm/Support/Casting.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/MLIRContext.h>
@@ -158,7 +157,7 @@ struct ErasePow0 final : OpRewritePattern<PowOp> {
     if (op.getExponentValue() != 0.0) {
       return failure();
     }
-    if (llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+    if (isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
       if (op.getNumTargets() == 1) {
         rewriter.replaceOpWithNewOp<IdOp>(op, op.getTarget(0));
       } else {
@@ -196,7 +195,7 @@ struct MergeNestedPow final : OpRewritePattern<PowOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(PowOp op,
                                 PatternRewriter& rewriter) const override {
-    auto innerPow = llvm::dyn_cast<PowOp>(op.getBodyUnitary().getOperation());
+    auto innerPow = dyn_cast<PowOp>(op.getBodyUnitary().getOperation());
     if (!innerPow) {
       return failure();
     }
@@ -212,7 +211,7 @@ struct MoveCtrlOutside final : OpRewritePattern<PowOp> {
   using OpRewritePattern::OpRewritePattern;
   LogicalResult matchAndRewrite(PowOp op,
                                 PatternRewriter& rewriter) const override {
-    auto innerCtrl = llvm::dyn_cast<CtrlOp>(op.getBodyUnitary().getOperation());
+    auto innerCtrl = dyn_cast<CtrlOp>(op.getBodyUnitary().getOperation());
     if (!innerCtrl) {
       return failure();
     }
@@ -241,37 +240,35 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     auto* innerOp = op.getBodyUnitary().getOperation();
     const double r = op.getExponentValue();
     auto loc = op.getLoc();
-    const bool insideModifier =
-        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
+    const bool insideModifier = isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
 
     // Folds for X/Y/SX/SXdg emit an additional GPhase op, which is not
     // allowed when nested inside a modifier (single-child constraint).
-    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
+    if (isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
       return failure();
     }
 
     // Pre-check: only proceed for gate types we can fold.
     // HOp, ECROp, SWAPOp additionally require an integer exponent.
-    if (llvm::isa<HOp, ECROp, SWAPOp>(innerOp) &&
-        !utils::isIntegerExponent(r)) {
+    if (isa<HOp, ECROp, SWAPOp>(innerOp) && !utils::isIntegerExponent(r)) {
       return failure();
     }
-    if (!llvm::isa<GPhaseOp, XOp, YOp, ZOp, SOp, SdgOp, TOp, TdgOp, SXOp,
-                   SXdgOp, HOp, ECROp, SWAPOp, RXOp, RYOp, RZOp, POp, ROp,
-                   RXXOp, RYYOp, RZXOp, RZZOp, XXPlusYYOp, XXMinusYYOp, iSWAPOp,
-                   IdOp, BarrierOp>(innerOp)) {
+    if (!isa<GPhaseOp, XOp, YOp, ZOp, SOp, SdgOp, TOp, TdgOp, SXOp, SXdgOp, HOp,
+             ECROp, SWAPOp, RXOp, RYOp, RZOp, POp, ROp, RXXOp, RYYOp, RZXOp,
+             RZZOp, XXPlusYYOp, XXMinusYYOp, iSWAPOp, IdOp, BarrierOp>(
+            innerOp)) {
       return failure();
     }
 
     // Move supporting ops (constants, arithmetic) out of the body so their
     // Values are accessible from outside and survive PowOp erasure.
     for (auto& bodyOp : llvm::make_early_inc_range(*op.getBody())) {
-      if (&bodyOp != innerOp && !llvm::isa<YieldOp>(&bodyOp)) {
+      if (&bodyOp != innerOp && !isa<YieldOp>(&bodyOp)) {
         rewriter.moveOpBefore(&bodyOp, op);
       }
     }
 
-    return llvm::TypeSwitch<Operation*, LogicalResult>(innerOp)
+    return TypeSwitch<Operation*, LogicalResult>(innerOp)
         // --- Rotation gates: multiply angle by exponent ---
         // pow(r) { gphase(θ) } → gphase(r*θ)
         .Case<GPhaseOp>([&](auto gate) {
@@ -501,12 +498,11 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
 } // namespace
 
 UnitaryOpInterface PowOp::getBodyUnitary() {
-  return llvm::cast<UnitaryOpInterface>(*(++getBody()->rbegin()));
+  return cast<UnitaryOpInterface>(*(++getBody()->rbegin()));
 }
 
 void PowOp::build(OpBuilder& odsBuilder, OperationState& odsState,
-                  double exponent,
-                  const llvm::function_ref<void()>& bodyBuilder) {
+                  double exponent, const function_ref<void()>& bodyBuilder) {
   const OpBuilder::InsertionGuard guard(odsBuilder);
   odsState.addAttribute("exponent", odsBuilder.getF64FloatAttr(exponent));
   auto* region = odsState.addRegion();
@@ -522,17 +518,17 @@ LogicalResult PowOp::verify() {
   if (block.getOperations().size() < 2) {
     return emitOpError("body region must have at least two operations");
   }
-  if (!llvm::isa<YieldOp>(block.back())) {
+  if (!isa<YieldOp>(block.back())) {
     return emitOpError(
         "last operation in body region must be a yield operation");
   }
   auto iter = ++block.rbegin();
-  if (!llvm::isa<UnitaryOpInterface>(*iter)) {
+  if (!isa<UnitaryOpInterface>(*iter)) {
     return emitOpError(
         "second to last operation in body region must be a unitary operation");
   }
   for (auto it = ++iter; it != block.rend(); ++it) {
-    if (llvm::isa<UnitaryOpInterface>(*it)) {
+    if (isa<UnitaryOpInterface>(*it)) {
       return emitOpError("body region may only contain a single unitary op");
     }
   }

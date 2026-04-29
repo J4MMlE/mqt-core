@@ -17,7 +17,6 @@
 #include <llvm/ADT/STLFunctionalExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/TypeSwitch.h>
-#include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/IR/Builders.h>
@@ -168,7 +167,7 @@ struct ErasePow0 final : OpRewritePattern<PowOp> {
       return failure();
     }
 
-    if (llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
+    if (isa<CtrlOp, InvOp, PowOp>(op->getParentOp())) {
       if (op.getNumTargets() == 1) {
         rewriter.replaceOpWithNewOp<IdOp>(op, op.getInputTarget(0));
       } else {
@@ -196,10 +195,10 @@ struct NegPowToInvPow final : OpRewritePattern<PowOp> {
 
     rewriter.replaceOpWithNewOp<PowOp>(
         op, op.getQubitsIn(), -exp,
-        [&](ValueRange powArgs) -> llvm::SmallVector<Value> {
+        [&](ValueRange powArgs) -> SmallVector<Value> {
           return InvOp::create(
                      rewriter, op.getLoc(), powArgs,
-                     [&](ValueRange invArgs) -> llvm::SmallVector<Value> {
+                     [&](ValueRange invArgs) -> SmallVector<Value> {
                        auto* invBody = rewriter.getInsertionBlock();
                        rewriter.inlineBlockBefore(op.getBody(), invBody,
                                                   invBody->begin(), invArgs);
@@ -221,7 +220,7 @@ struct MergeNestedPow final : OpRewritePattern<PowOp> {
 
   LogicalResult matchAndRewrite(PowOp op,
                                 PatternRewriter& rewriter) const override {
-    auto innerPow = llvm::dyn_cast<PowOp>(op.getBodyUnitary().getOperation());
+    auto innerPow = dyn_cast<PowOp>(op.getBodyUnitary().getOperation());
     if (!innerPow) {
       return failure();
     }
@@ -242,7 +241,7 @@ struct MoveCtrlOutside final : OpRewritePattern<PowOp> {
   LogicalResult matchAndRewrite(PowOp op,
                                 PatternRewriter& rewriter) const override {
     auto bodyUnitary = op.getBodyUnitary();
-    auto innerCtrlOp = llvm::dyn_cast<CtrlOp>(bodyUnitary.getOperation());
+    auto innerCtrlOp = dyn_cast<CtrlOp>(bodyUnitary.getOperation());
     if (!innerCtrlOp) {
       return failure();
     }
@@ -256,19 +255,18 @@ struct MoveCtrlOutside final : OpRewritePattern<PowOp> {
 
     rewriter.replaceOpWithNewOp<CtrlOp>(
         op, controls, targets,
-        [&](ValueRange ctrlTargetArgs) -> llvm::SmallVector<Value> {
-          return PowOp::create(
-                     rewriter, op.getLoc(), ctrlTargetArgs, exponent,
-                     [&](ValueRange powArgs) -> llvm::SmallVector<Value> {
-                       auto* powBody = rewriter.getInsertionBlock();
-                       rewriter.inlineBlockBefore(innerCtrlOp.getBody(),
-                                                  powBody, powBody->begin(),
-                                                  powArgs);
-                       auto yieldedValues =
-                           llvm::to_vector(powBody->back().getOperands());
-                       rewriter.eraseOp(&powBody->back());
-                       return yieldedValues;
-                     })
+        [&](ValueRange ctrlTargetArgs) -> SmallVector<Value> {
+          return PowOp::create(rewriter, op.getLoc(), ctrlTargetArgs, exponent,
+                               [&](ValueRange powArgs) -> SmallVector<Value> {
+                                 auto* powBody = rewriter.getInsertionBlock();
+                                 rewriter.inlineBlockBefore(
+                                     innerCtrlOp.getBody(), powBody,
+                                     powBody->begin(), powArgs);
+                                 auto yieldedValues = llvm::to_vector(
+                                     powBody->back().getOperands());
+                                 rewriter.eraseOp(&powBody->back());
+                                 return yieldedValues;
+                               })
               .getResults();
         });
 
@@ -292,33 +290,31 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     auto* innerOp = op.getBodyUnitary().getOperation();
     const double r = op.getExponentValue();
     auto loc = op.getLoc();
-    const bool insideModifier =
-        llvm::isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
+    const bool insideModifier = isa<CtrlOp, InvOp, PowOp>(op->getParentOp());
 
     // Folds for X/Y/SX/SXdg emit an additional GPhase op, which is not
     // allowed when nested inside a modifier (single-child constraint).
-    if (llvm::isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
+    if (isa<XOp, YOp, SXOp, SXdgOp>(innerOp) && insideModifier) {
       return failure();
     }
 
     // Even-parity folds for multi-qubit hermitian gates produce identity.
     // Bail out before inlining when inside a modifier, since we cannot
     // represent a multi-qubit identity as a single body unitary.
-    if (insideModifier && llvm::isa<ECROp, SWAPOp>(innerOp) &&
+    if (insideModifier && isa<ECROp, SWAPOp>(innerOp) &&
         utils::isIntegerExponent(r) && utils::isEvenExponent(r)) {
       return failure();
     }
 
     // Pre-check: only proceed for gate types we can fold.
     // HOp, ECROp, SWAPOp additionally require an integer exponent.
-    if (llvm::isa<HOp, ECROp, SWAPOp>(innerOp) &&
-        !utils::isIntegerExponent(r)) {
+    if (isa<HOp, ECROp, SWAPOp>(innerOp) && !utils::isIntegerExponent(r)) {
       return failure();
     }
-    if (!llvm::isa<GPhaseOp, XOp, YOp, ZOp, SOp, SdgOp, TOp, TdgOp, SXOp,
-                   SXdgOp, HOp, ECROp, SWAPOp, RXOp, RYOp, RZOp, POp, ROp,
-                   RXXOp, RYYOp, RZXOp, RZZOp, XXPlusYYOp, XXMinusYYOp, iSWAPOp,
-                   IdOp, BarrierOp>(innerOp)) {
+    if (!isa<GPhaseOp, XOp, YOp, ZOp, SOp, SdgOp, TOp, TdgOp, SXOp, SXdgOp, HOp,
+             ECROp, SWAPOp, RXOp, RYOp, RZOp, POp, ROp, RXXOp, RYYOp, RZXOp,
+             RZZOp, XXPlusYYOp, XXMinusYYOp, iSWAPOp, IdOp, BarrierOp>(
+            innerOp)) {
       return failure();
     }
 
@@ -329,7 +325,7 @@ struct FoldPowIntoGate final : OpRewritePattern<PowOp> {
     rewriter.setInsertionPoint(op);
 
     const LogicalResult result =
-        llvm::TypeSwitch<Operation*, LogicalResult>(innerOp)
+        TypeSwitch<Operation*, LogicalResult>(innerOp)
             // --- Rotation gates: multiply angle by exponent ---
             // pow(r) { gphase(θ) } → gphase(r*θ)
             .Case<GPhaseOp>([&](auto gate) {
@@ -564,7 +560,7 @@ UnitaryOpInterface PowOp::getBodyUnitary() {
   // also contain constants and arithmetic operations, e.g., created as part of
   // canonicalization. Thus, the only safe way to access the unitary operation
   // is to get the second operation from the back of the region.
-  return llvm::cast<UnitaryOpInterface>(*(++getBody()->rbegin()));
+  return cast<UnitaryOpInterface>(*(++getBody()->rbegin()));
 }
 
 Value PowOp::getInputQubit(const size_t i) {
@@ -599,10 +595,9 @@ Value PowOp::getOutputForInput(Value input) {
   llvm::reportFatalUsageError("Given qubit is not an input of the operation");
 }
 
-void PowOp::build(
-    OpBuilder& odsBuilder, OperationState& odsState, ValueRange qubits,
-    double exponent,
-    llvm::function_ref<llvm::SmallVector<Value>(ValueRange)> bodyBuilder) {
+void PowOp::build(OpBuilder& odsBuilder, OperationState& odsState,
+                  ValueRange qubits, double exponent,
+                  function_ref<SmallVector<Value>(ValueRange)> bodyBuilder) {
   build(odsBuilder, odsState, qubits, exponent);
   auto& block = odsState.regions.front()->emplaceBlock();
 
@@ -634,7 +629,7 @@ LogicalResult PowOp::verify() {
              << i << " does not match target type";
     }
   }
-  if (!llvm::isa<YieldOp>(block.back())) {
+  if (!isa<YieldOp>(block.back())) {
     return emitOpError(
         "last operation in body region must be a yield operation");
   }
@@ -644,12 +639,12 @@ LogicalResult PowOp::verify() {
            << numTargets << " values, but found " << numYieldOperands;
   }
   auto iter = ++block.rbegin();
-  if (!llvm::isa<UnitaryOpInterface>(*iter)) {
+  if (!isa<UnitaryOpInterface>(*iter)) {
     return emitOpError(
         "second to last operation in body region must be a unitary operation");
   }
   for (auto it = ++iter; it != block.rend(); ++it) {
-    if (llvm::isa<UnitaryOpInterface>(*it)) {
+    if (isa<UnitaryOpInterface>(*it)) {
       return emitOpError("body region may only contain a single unitary op");
     }
   }

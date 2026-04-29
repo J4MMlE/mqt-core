@@ -13,6 +13,7 @@
 
 #include <Eigen/Core>
 #include <llvm/ADT/STLFunctionalExtras.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Arith/IR/Arith.h>
@@ -91,8 +92,7 @@ struct MovePowOutside final : OpRewritePattern<InvOp> {
 
   LogicalResult matchAndRewrite(InvOp invOp,
                                 PatternRewriter& rewriter) const override {
-    auto innerPow =
-        llvm::dyn_cast<PowOp>(invOp.getBodyUnitary().getOperation());
+    auto innerPow = dyn_cast<PowOp>(invOp.getBodyUnitary().getOperation());
     if (!innerPow) {
       return failure();
     }
