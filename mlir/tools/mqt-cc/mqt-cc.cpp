@@ -11,6 +11,7 @@
 #include "ir/QuantumComputation.hpp"
 #include "mlir/Compiler/CompilerPipeline.h"
 #include "mlir/Dialect/QC/IR/QCDialect.h"
+#include "mlir/Dialect/QC/Translation/TranslateQASM3ToQC.h"
 #include "mlir/Dialect/QC/Translation/TranslateQuantumComputationToQC.h"
 #include "mlir/Dialect/QCO/IR/QCODialect.h"
 #include "qasm3/Exception.hpp"
@@ -25,6 +26,7 @@
 #include <mlir/Dialect/ControlFlow/IR/ControlFlow.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/LLVMIR/LLVMDialect.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
 #include <mlir/Dialect/SCF/IR/SCF.h>
 #include <mlir/IR/AsmState.h>
 #include <mlir/IR/MLIRContext.h>
@@ -71,21 +73,24 @@ static cl::opt<bool>
                           cl::desc("Print IR after each compiler stage"),
                           cl::init(false));
 
+static cl::opt<bool> directImport(
+    "direct-import",
+    cl::desc("Use direct QASM3 → QC import (bypasses QuantumComputation)"),
+    cl::init(false));
+
 static cl::opt<bool> disableMergeSingleQubitRotationGates(
     "disable-merge-single-qubit-rotation-gates",
     cl::desc("Disable quaternion-based single-qubit rotation gate merging"),
     cl::init(false));
 
 /**
- * @brief Load and parse a .qasm file
+ * @brief Load and parse a .qasm file via the legacy QuantumComputation path.
  */
-static OwningOpRef<ModuleOp> loadQASMFile(StringRef filename,
-                                          MLIRContext* context) {
+static OwningOpRef<ModuleOp> loadQASMFileLegacy(StringRef filename,
+                                                MLIRContext* context) {
   try {
-    // Parse the input QASM file
     const ::qc::QuantumComputation qc =
         qasm3::Importer::importf(filename.str());
-    // Translate to MLIR dialect QC
     return translateQuantumComputationToQC(context, qc);
   } catch (const qasm3::CompilerError& exception) {
     errs() << "Failed to parse QASM file '" << filename << "': '"
@@ -95,6 +100,17 @@ static OwningOpRef<ModuleOp> loadQASMFile(StringRef filename,
            << exception.what() << "'\n";
   }
   return nullptr;
+}
+
+/**
+ * @brief Load and parse a .qasm file, dispatching to the chosen import path.
+ */
+static OwningOpRef<ModuleOp> loadQASMFile(StringRef filename,
+                                          MLIRContext* context) {
+  if (directImport) {
+    return mlir::qc::translateQASM3ToQC(context, filename.str());
+  }
+  return loadQASMFileLegacy(filename, context);
 }
 
 /**
@@ -146,6 +162,7 @@ int main(int argc, char** argv) {
   registry.insert<arith::ArithDialect>();
   registry.insert<cf::ControlFlowDialect>();
   registry.insert<func::FuncDialect>();
+  registry.insert<memref::MemRefDialect>();
   registry.insert<scf::SCFDialect>();
   registry.insert<LLVM::LLVMDialect>();
 
