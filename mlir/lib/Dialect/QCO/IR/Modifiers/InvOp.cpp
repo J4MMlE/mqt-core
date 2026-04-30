@@ -79,6 +79,41 @@ struct MoveCtrlOutside final : OpRewritePattern<InvOp> {
 };
 
 /**
+ * @brief Absorb inv into pow by negating the exponent, i.e.,
+ * `inv(pow(p){U}) => pow(-p){U}`.
+ *
+ * This is always valid for unitaries: (U^p)† = U^{-p}.
+ * Downstream patterns (e.g., NegPowToInvPow) can then rewrite
+ * pow(-p){U} => pow(p){inv(U)} when the exponent is an integer.
+ */
+struct MovePowOutside final : OpRewritePattern<InvOp> {
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(InvOp invOp,
+                                PatternRewriter& rewriter) const override {
+    auto innerPow =
+        llvm::dyn_cast<PowOp>(invOp.getBodyUnitary().getOperation());
+    if (!innerPow) {
+      return failure();
+    }
+
+    const double exponent = innerPow.getExponentValue();
+
+    rewriter.replaceOpWithNewOp<PowOp>(
+        invOp, invOp.getQubitsIn(), -exponent,
+        [&](ValueRange powArgs) -> llvm::SmallVector<Value> {
+          auto* powBody = rewriter.getInsertionBlock();
+          rewriter.inlineBlockBefore(innerPow.getBody(), powBody,
+                                     powBody->begin(), powArgs);
+          auto yieldedValues = llvm::to_vector(powBody->back().getOperands());
+          rewriter.eraseOp(&powBody->back());
+          return yieldedValues;
+        });
+    return success();
+  }
+};
+
+/**
  * @brief Remove inverse modifiers around self-adjoint gates.
  *
  * For self-adjoint gates U (i.e., U = U†), inv(U) = U holds.
@@ -397,8 +432,8 @@ LogicalResult InvOp::verify() {
 
 void InvOp::getCanonicalizationPatterns(RewritePatternSet& results,
                                         MLIRContext* context) {
-  results.add<MoveCtrlOutside, InlineSelfAdjoint, ReplaceWithKnownGates,
-              CancelNestedInv>(context);
+  results.add<MoveCtrlOutside, MovePowOutside, InlineSelfAdjoint,
+              ReplaceWithKnownGates, CancelNestedInv>(context);
 }
 
 std::optional<Eigen::MatrixXcd> InvOp::getUnitaryMatrix() {

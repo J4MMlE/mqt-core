@@ -67,7 +67,7 @@ test config=default_config: (_ensure_configured config) (_build "all" config)
     ctest --test-dir {{build_dir}}/{{config}} -C {{config}} -j {{jobs}} --output-on-failure
 
 # Run only the QCO quaternion merge unit tests (faster iteration)
-test-qco config=default_config: (_ensure_configured config) (_build "mqt-core-mlir-unittest-optimizations" config)
+test-qco config=default_config: (_ensure_configured config) (_build "all" config)
     {{build_dir}}/{{config}}/mlir/unittests/Dialect/QCO/Transforms/Optimizations/mqt-core-mlir-unittest-optimizations
 
 # Delete coverage data (.gcda files) from a previous run

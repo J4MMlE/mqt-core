@@ -157,24 +157,24 @@ r34 = r_gate(3, 4)
 r11 = r_gate(1, 1)
 
 cases = [
+    ("RX+RX", [("RX", rx), ("RX", rx)]),
     ("RX+RY", [("RX", rx), ("RY", ry)]),
     ("RX+RZ", [("RX", rx), ("RZ", rz)]),
     ("RY+RX", [("RY", ry), ("RX", rx)]),
+    ("RY+RY", [("RY", ry), ("RY", ry)]),
     ("RY+RZ", [("RY", ry), ("RZ", rz)]),
     ("RZ+RX", [("RZ", rz), ("RX", rx)]),
     ("RZ+RY", [("RZ", rz), ("RY", ry)]),
-    ("RX+RX", [("RX", rx), ("RX", rx)]),
-    ("RY+RY", [("RY", ry), ("RY", ry)]),
     ("RZ+RZ", [("RZ", rz), ("RZ", rz)]),
     ("U+U", [("U", u1, 1.0, 2.0, 3.0), ("U", u2, 4.0, 5.0, 6.0)]),
     ("P+RX", [("P", p1, 1.0), ("RX", rx)]),
-    ("U2+U2", [("U2", u2_12, 1.0, 2.0), ("U2", u2_34, 3.0, 4.0)]),
     ("R+R", [("R", r12, 1.0, 2.0), ("R", r34, 3.0, 4.0)]),
-    ("R+R same", [("R", r11, 1.0, 1.0), ("R", r11, 1.0, 1.0)]),
-    ("small RX+RY", [("RX", smallx), ("RY", smally)]),
-    ("RX(pi)+RY(pi)", [("RX", px), ("RY", py)]),
+    ("U2+U2", [("U2", u2_12, 1.0, 2.0), ("U2", u2_34, 3.0, 4.0)]),
     ("RZ+RY+RX pi", [("RZ", pz), ("RY", py), ("RX", px)]),
     ("RY+RZ+RZ-+RY-", [("RY", ry), ("RZ", rz), ("RZ", mz), ("RY", my)]),
+    ("small RX+RY", [("RX", smallx), ("RY", smally)]),
+    ("RX(pi)+RY(pi)", [("RX", px), ("RY", py)]),
+    ("R+R same", [("R", r11, 1.0, 1.0), ("R", r11, 1.0, 1.0)]),
 ]
 
 if __name__ == "__main__":
