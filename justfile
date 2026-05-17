@@ -17,7 +17,8 @@ build_dir := "build"
 # Number of parallel build and test jobs (passed to cmake --jobs and ctest -j)
 jobs := "8"
 # Default CMake build type when not specified per-recipe ("Debug" or "Release")
-default_config := "Debug"
+# default_config := "Debug"
+default_config := "Release"
 
 default:
     @just --list

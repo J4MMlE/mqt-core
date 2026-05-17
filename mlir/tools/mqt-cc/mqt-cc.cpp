@@ -35,9 +35,12 @@
 #include <mlir/Support/FileUtilities.h>
 #include <mlir/Support/LogicalResult.h>
 
+#include <chrono>
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace llvm;
 using namespace mlir;
@@ -72,6 +75,18 @@ static cl::opt<bool>
     printIRAfterAllStages("mlir-print-ir-after-all-stages",
                           cl::desc("Print IR after each compiler stage"),
                           cl::init(false));
+
+static cl::opt<bool> emitPipelineTime(
+    "emit-pipeline-time",
+    cl::desc("Print pipeline-only wall time in seconds to stderr"),
+    cl::init(false));
+
+static cl::opt<unsigned> pipelineIterations(
+    "iterations",
+    cl::desc("Run the compilation pipeline N times and report the average "
+             "pipeline time (parse/IO done once; module cloned per iteration)"),
+    cl::value_desc("N"),
+    cl::init(1));
 
 static cl::opt<bool> directImport(
     "direct-import",
@@ -166,20 +181,6 @@ int main(int argc, char** argv) {
   registry.insert<scf::SCFDialect>();
   registry.insert<LLVM::LLVMDialect>();
 
-  MLIRContext context(registry);
-  context.loadAllAvailableDialects();
-
-  // Load the input .mlir file
-  OwningOpRef<ModuleOp> module;
-  if (inputFilename.getValue().ends_with(".qasm")) {
-    module = loadQASMFile(inputFilename, &context);
-  } else {
-    module = loadMLIRFile(inputFilename, &context);
-  }
-  if (!module) {
-    return 1;
-  }
-
   // Configure the compiler pipeline
   QuantumCompilerConfig config;
   config.convertToQIR = convertToQIR;
@@ -190,39 +191,82 @@ int main(int argc, char** argv) {
   config.disableMergeSingleQubitRotationGates =
       disableMergeSingleQubitRotationGates;
 
-  // Run the compilation pipeline
-  CompilationRecord record;
-  if (const QuantumCompilerPipeline pipeline(config);
-      pipeline
-          .runPipeline(module.get(), recordIntermediates ? &record : nullptr)
-          .failed()) {
-    errs() << "Compilation pipeline failed\n";
+  // Parse the input once, then clone the module for each benchmark iteration.
+  // All dialects are loaded upfront, so the context state is stable across runs.
+  MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+
+  OwningOpRef<ModuleOp> templateModule;
+  if (inputFilename.getValue().ends_with(".qasm")) {
+    templateModule = loadQASMFile(inputFilename, &context);
+  } else {
+    templateModule = loadMLIRFile(inputFilename, &context);
+  }
+  if (!templateModule) {
     return 1;
   }
 
-  if (recordIntermediates) {
-    outs() << "=== Compilation Record ===\n";
-    outs() << "After QC Import:\n" << record.afterQCImport << "\n";
-    outs() << "After Initial QC Canonicalization:\n"
-           << record.afterInitialCanon << "\n";
-    outs() << "After QC-to-QCO Conversion:\n"
-           << record.afterQCOConversion << "\n";
-    outs() << "After Initial QCO Canonicalization:\n"
-           << record.afterQCOCanon << "\n";
-    outs() << "After Optimization:\n" << record.afterOptimization << "\n";
-    outs() << "After Final QCO Canonicalization:\n"
-           << record.afterOptimizationCanon << "\n";
-    outs() << "After QCO-to-QC Conversion:\n"
-           << record.afterQCConversion << "\n";
-    outs() << "After Final QC Canonicalization:\n"
-           << record.afterQCCanon << "\n";
-    outs() << "After QC-to-QIR Conversion:\n"
-           << record.afterQIRConversion << "\n";
-    outs() << "After QIR Canonicalization:\n" << record.afterQIRCanon << "\n";
+  // Run the compilation pipeline (optionally N times for benchmarking).
+  const unsigned iterations = pipelineIterations;
+  std::vector<double> iterationTimes;
+  iterationTimes.reserve(iterations);
+  OwningOpRef<ModuleOp> lastResult;
+
+  for (unsigned i = 0; i < iterations; ++i) {
+    OwningOpRef<ModuleOp> current(templateModule.get().clone());
+
+    const QuantumCompilerPipeline pipeline(config);
+
+    CompilationRecord record;
+    const auto pipelineStart = std::chrono::steady_clock::now();
+    if (pipeline.runPipeline(current.get(), recordIntermediates ? &record : nullptr).failed()) {
+      errs() << "Compilation pipeline failed\n";
+      return 1;
+    }
+    const auto pipelineEnd = std::chrono::steady_clock::now();
+    iterationTimes.push_back(
+        std::chrono::duration<double>(pipelineEnd - pipelineStart).count());
+
+    if (i == iterations - 1) {
+      lastResult = std::move(current);
+
+      if (recordIntermediates) {
+        outs() << "=== Compilation Record ===\n";
+        outs() << "After QC Import:\n" << record.afterQCImport << "\n";
+        outs() << "After Initial QC Canonicalization:\n"
+               << record.afterInitialCanon << "\n";
+        outs() << "After QC-to-QCO Conversion:\n"
+               << record.afterQCOConversion << "\n";
+        outs() << "After Initial QCO Canonicalization:\n"
+               << record.afterQCOCanon << "\n";
+        outs() << "After Optimization:\n" << record.afterOptimization << "\n";
+        outs() << "After Final QCO Canonicalization:\n"
+               << record.afterOptimizationCanon << "\n";
+        outs() << "After QCO-to-QC Conversion:\n"
+               << record.afterQCConversion << "\n";
+        outs() << "After Final QC Canonicalization:\n"
+               << record.afterQCCanon << "\n";
+        outs() << "After QC-to-QIR Conversion:\n"
+               << record.afterQIRConversion << "\n";
+        outs() << "After QIR Canonicalization:\n"
+               << record.afterQIRCanon << "\n";
+      }
+    }
+  }
+
+  if (emitPipelineTime) {
+    errs() << "pipeline-times: ";
+    for (unsigned i = 0; i < iterationTimes.size(); ++i) {
+      if (i > 0) {
+        errs() << ",";
+      }
+      errs() << iterationTimes[i];
+    }
+    errs() << "\n";
   }
 
   // Write the output
-  if (writeOutput(module.get(), outputFilename).failed()) {
+  if (writeOutput(lastResult.get(), outputFilename).failed()) {
     errs() << "Failed to write output file: " << outputFilename << "\n";
     return 1;
   }
